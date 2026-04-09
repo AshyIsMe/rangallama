@@ -4,6 +4,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+PORT=6969
+
 grep ubuntu /etc/os-release >/dev/null || (echo "only ubuntu derivatives supported" && exit)
 
 
@@ -35,6 +37,31 @@ MODEL_ARGS[gemma-4-e4b]="--temp 1.0 --top-p 0.95 --top-k 64"
 MODEL_ARGS[gemma-4-26b-a4b]="--temp 1.0 --top-p 0.95 --top-k 64"
 MODEL_ARGS[qwen3.5-35b-a3b]="--ctx-size 16384 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.00"
 
+declare -A SERVER_REPO SERVER_GGUF SERVER_MMPROJ_NAME SERVER_ALIAS SERVER_ARGS
+SERVER_REPO[qwen3.5-35b-a3b]="unsloth/Qwen3.5-35B-A3B-GGUF"
+SERVER_GGUF[qwen3.5-35b-a3b]="Qwen3.5-35B-A3B-UD-Q4_K_XL.gguf"
+SERVER_MMPROJ_NAME[qwen3.5-35b-a3b]="mmproj-F16.gguf"
+SERVER_ALIAS[qwen3.5-35b-a3b]="unsloth/Qwen3.5-35B-A3B"
+SERVER_ARGS[qwen3.5-35b-a3b]="--temp 0.6 --top-p 0.95 --ctx-size 16384 --top-k 20 --min-p 0.00"
+
+SERVER_REPO[gemma-4-26b-a4b]="unsloth/gemma-4-26B-A4B-it-GGUF"
+SERVER_GGUF[gemma-4-26b-a4b]="gemma-4-26B-A4B-it-UD-Q4_K_XL.gguf"
+SERVER_MMPROJ_NAME[gemma-4-26b-a4b]="mmproj-BF16.gguf"
+SERVER_ALIAS[gemma-4-26b-a4b]="unsloth/gemma-4-26B-A4B-it-GGUF"
+SERVER_ARGS[gemma-4-26b-a4b]="--temp 1.0 --top-p 0.95 --top-k 64 --chat-template-kwargs '{\"enable_thinking\":true}'"
+
+find_gguf() {
+    local repo_dir="$1"
+    local filename="$2"
+    local result
+    result=$(find "$repo_dir" -name "$filename" -print -quit 2>/dev/null)
+    if [ -z "$result" ]; then
+        echo "Could not find $filename in $repo_dir" >&2
+        exit 1
+    fi
+    echo "$result"
+}
+
 run_model() {
     local model="$1"
     local hf_ref="${MODELS[$model]}"
@@ -49,15 +76,43 @@ run_model() {
         ${MODEL_ARGS[$model]}
 }
 
+serve_model() {
+    local model="$1"
+    local repo="${SERVER_REPO[$model]}"
+    if [ -z "$repo" ]; then
+        echo "Unknown model for serve: $model"
+        echo "Available models: ${!SERVER_REPO[*]}"
+        exit 1
+    fi
+    local model_path
+    model_path=$(find_gguf "$repo" "${SERVER_GGUF[$model]}")
+    local mmproj_path
+    mmproj_path=$(find_gguf "$repo" "${SERVER_MMPROJ_NAME[$model]}")
+    eval ./llama.cpp/llama-server \
+        --model "\"$model_path\"" \
+        --mmproj "\"$mmproj_path\"" \
+        --alias "\"${SERVER_ALIAS[$model]}\"" \
+        --port "$PORT" \
+        "${SERVER_ARGS[$model]}"
+}
+
 case "${1:-}" in
     run)
         [ -z "${2:-}" ] && echo "Usage: $0 run <model>" && echo "Available models: ${!MODELS[*]}" && exit 1
         run_model "$2"
         ;;
+    serve)
+        [ -z "${2:-}" ] && echo "Usage: $0 serve <model>" && echo "Available models: ${!SERVER_REPO[*]}" && exit 1
+        serve_model "$2"
+        ;;
     *)
         echo "Usage: $0 <command>"
         echo "Commands:"
-        echo "  run <model>  Run a model (${!MODELS[*]})"
+        echo "  run <model>    Run a model (${!MODELS[*]})"
+        echo "  serve <model>  Serve a model (${!SERVER_REPO[*]})"
+        echo ""
+        echo "When serving run claude like so:"
+        echo "  ANTHROPIC_BASE_URL=http://127.0.0.1:$PORT claude" 
         exit 1
         ;;
 esac
