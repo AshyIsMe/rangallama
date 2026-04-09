@@ -8,8 +8,10 @@ PORT=6969
 
 grep ubuntu /etc/os-release >/dev/null || (echo "only ubuntu derivatives supported" && exit)
 
-
+# unsloth is great:
 # https://unsloth.ai/docs/models/gemma-4#llama.cpp-guide
+# https://unsloth.ai/docs/models/qwen3.5#llama.cpp-guides
+
 PACKAGES="pciutils build-essential cmake curl libcurl4-openssl-dev libvulkan-dev glslc"
 if ! dpkg -s $PACKAGES >/dev/null 2>&1; then
     echo "Installing dependencies: " $PACKAGES
