@@ -12,7 +12,7 @@ grep ubuntu /etc/os-release >/dev/null || (echo "only ubuntu derivatives support
 # https://unsloth.ai/docs/models/gemma-4#llama.cpp-guide
 # https://unsloth.ai/docs/models/qwen3.5#llama.cpp-guides
 
-PACKAGES="pciutils build-essential cmake curl libcurl4-openssl-dev libvulkan-dev glslc"
+PACKAGES="pciutils build-essential cmake curl libcurl4-openssl-dev libvulkan-dev glslc spirv-headers"
 if ! dpkg -s $PACKAGES >/dev/null 2>&1; then
     echo "Installing dependencies: " $PACKAGES
     sudo apt-get update && sudo apt-get install $PACKAGES -y
